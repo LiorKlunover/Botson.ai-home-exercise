@@ -4,6 +4,11 @@ import { useState, useEffect } from 'react';
 import FilterPanel from './components/FilterPanel';
 import TotalCard from './components/TotalCard';
 import FeedGraphCard from './components/FeedGraphCard';
+import StatusDistributionCard from './components/StatusDistributionCard';
+import ProgressMetricsCard from './components/ProgressMetricsCard';
+import ClientActivityCard from './components/ClientActivityCard';
+import MetadataQualityCard from './components/MetadataQualityCard';
+import RecordsPerFeedCard from './components/RecordsPerFeedCard';
 
 interface Filters {
   countries: string[];
@@ -208,6 +213,29 @@ export default function Dashboard() {
           <FeedGraphCard feeds={feedData.feeds} />
         )}
       </div>
+      
+      {/* Analytics Cards - Row 1 */}
+      {feedData && feedData.feeds.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <StatusDistributionCard feeds={feedData.feeds} />
+          <ProgressMetricsCard feeds={feedData.feeds} />
+        </div>
+      )}
+      
+      {/* Analytics Cards - Row 2 */}
+      {feedData && feedData.feeds.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <ClientActivityCard feeds={feedData.feeds} />
+          <MetadataQualityCard feeds={feedData.feeds} />
+        </div>
+      )}
+      
+      {/* Analytics Cards - Row 3 */}
+      {feedData && feedData.feeds.length > 0 && (
+        <div className="grid grid-cols-1 mb-6">
+          <RecordsPerFeedCard feeds={feedData.feeds} />
+        </div>
+      )}
       
       {/* Selected Filters */}
       <div className="bg-white p-6 rounded-lg shadow-sm mb-6">
