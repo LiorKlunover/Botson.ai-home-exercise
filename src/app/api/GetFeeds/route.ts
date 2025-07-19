@@ -7,7 +7,9 @@ const queryParamsSchema = z.object({
   countries: z.array(z.string()).optional(),
   clients: z.array(z.string()).optional(),
   page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().default(10)
+  pageSize: z.coerce.number().int().default(10).refine(val => val === -1 || val > 0, {
+    message: "pageSize must be -1 (for 'All') or a positive integer"
+  })
 });
 
 interface MongoFilter {
@@ -61,10 +63,14 @@ export async function GET(request: Request) {
     console.log('Skip:', skip);
     console.log('Page size:', pageSize);
     // Fetch feeds with pagination
-    const feeds = await Feed.find(filter)
-      .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(pageSize);
+    let feedsQuery = Feed.find(filter).sort({ timestamp: -1 });
+    
+    // If pageSize is -1, return all results without pagination
+    if (pageSize !== -1) {
+      feedsQuery = feedsQuery.skip(skip).limit(pageSize);
+    }
+    
+    const feeds = await feedsQuery;
     
     // Get distinct countries and clients for filter options
     const allCountries = await Feed.distinct('country_code');
@@ -77,7 +83,7 @@ export async function GET(request: Request) {
       pagination: {
         page,
         pageSize,
-        totalPages: Math.ceil(totalCount / pageSize),
+        totalPages: pageSize === -1 ? 1 : Math.ceil(totalCount / pageSize),
         totalCount
       },
       filterOptions: {

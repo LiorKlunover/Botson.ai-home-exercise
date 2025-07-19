@@ -31,7 +31,7 @@ export default function FilterPanel({ onFilterChange }: FilterPanelProps) {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(10);
+  const [pageSize, setPageSize] = useState<number>(-1); // -1 represents 'All'
   const [totalPages, setTotalPages] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -300,6 +300,7 @@ export default function FilterPanel({ onFilterChange }: FilterPanelProps) {
                   value={pageSize}
                   onChange={handlePageSizeChange}
                 >
+                  <option value="-1">All</option>
                   <option value="5">5</option>
                   <option value="10">10</option>
                   <option value="25">25</option>
