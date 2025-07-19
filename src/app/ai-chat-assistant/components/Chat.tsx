@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { z } from "zod";
 import { IFeed } from "@/types";
-import DataGridTable from "@/app/dashboard/components/DataGridTable";
-import TotalCard from "@/app/dashboard/components/TotalCard";
+import SimpleDashboardWrapper from "@/app/dashboard/components/SimpleDashboardWrapper";
 
 // Generate a random ID for thread tracking
 const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -247,26 +246,13 @@ export default function Chat({ className }: ChatProps) {
           
           {/* Data Grid for displaying feed records */}
           <div className="mt-10 pt-4 space-y-6 border-t border-gray-200">
-            {currentFeeds.length > 0 && (
-              <div className="mb-4">
-                <TotalCard 
-                  totalRecords={currentFeeds.length} 
-                  isFiltered={false} 
-                />
-              </div>
-            )}
-            
-            {currentFeeds.length > 0 && (
-              <div className="mb-4 mt-6">
-                <DataGridTable 
-                  feeds={currentFeeds} 
-                  title="Feed Records" 
-                  description="Data retrieved from your query"
-                  enableFiltering={true}
-                  enableExport={true}
-                />
-              </div>
-            )}
+            {/* Dashboard Wrapper Integration */}
+              {currentFeeds.length > 0 && (
+                <div className="mb-6 bg-white rounded-lg shadow p-4">
+                  <h2 className="text-lg font-semibold mb-4">Dashboard Overview</h2>
+                  <SimpleDashboardWrapper feeds={currentFeeds} isLoading={isLoading} />
+                </div>
+              )}
           </div>
           
         </div>

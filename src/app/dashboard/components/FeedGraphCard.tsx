@@ -28,6 +28,7 @@ interface Feed {
 
 interface FeedGraphCardProps {
   feeds: Feed[];
+  isLoading?: boolean;
 }
 
 interface DailyFeedCount {
@@ -35,7 +36,7 @@ interface DailyFeedCount {
   count: number;
 }
 
-export default function FeedGraphCard({ feeds }: FeedGraphCardProps) {
+export default function FeedGraphCard({ feeds, isLoading = false }: FeedGraphCardProps) {
   const [dailyData, setDailyData] = useState<DailyFeedCount[]>([]);
 
   useEffect(() => {
@@ -85,7 +86,14 @@ export default function FeedGraphCard({ feeds }: FeedGraphCardProps) {
       </CardHeader>
       <CardContent>
         <div className="h-[300px] w-full">
-          {dailyData.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mb-2"></div>
+                <p className="text-gray-500">Loading feed data...</p>
+              </div>
+            </div>
+          ) : dailyData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={dailyData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
                 <defs>
