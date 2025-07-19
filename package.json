@@ -10,6 +10,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@langchain/anthropic": "^0.3.24",
     "@langchain/core": "^0.3.64",
     "@langchain/google-genai": "^0.2.15",
@@ -17,6 +19,8 @@
     "@langchain/langgraph-checkpoint-mongodb": "^0.0.6",
     "@langchain/mongodb": "^0.1.0",
     "@langchain/openai": "^0.6.2",
+    "@mui/material": "^5.15.13",
+    "@mui/icons-material": "^5.15.13",
     "@mui/x-data-grid": "^8.8.0",
     "@types/express": "^5.0.3",
     "@types/uuid": "^10.0.0",

@@ -14,6 +14,7 @@ import { MongoClient, Collection, Db } from "mongodb";
 import { z } from "zod";
 import "dotenv/config";
 import { feedLookupSystemMessage } from "./systempromts";
+import { IFeed } from "@/types";
 
 // Global variables
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
@@ -28,10 +29,14 @@ const RECURSION_LIMIT = 15;
 // Type definitions
 type FilterValue = string | number | Date | { $gte?: number | Date; $lte?: Date; };
 
-// Define the graph state
+// Define the graph state with proper reducers
 const GraphState = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
     reducer: (x, y) => x.concat(y),
+  }),
+  feeds: Annotation<IFeed[]>({
+    reducer: (x, y) => [...x, ...y],
+    default: () => [],
   }),
 });
 
@@ -150,33 +155,24 @@ interface FeedDocument {
   transactionSourceName?: string;
   recordCount?: number;
   timestamp?: Date;
+  progress?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
-function formatDirectResults(documents: FeedDocument[]): string {
-  const formattedResults = documents.map(doc => {
-    const pageContent = doc.embedding_text || 
-      `Feed from ${doc.country_code} in ${doc.currency_code}. ` +
-      `Status: ${doc.status}, Transaction source: ${doc.transactionSourceName}. ` +
-      `Record count: ${doc.recordCount}, Timestamp: ${doc.timestamp}`;
-    
-    return [{ pageContent, metadata: doc }, 1.0];
-  });
-  
-  return JSON.stringify(formattedResults);
-}
-
-// Search functions
+// Updated search functions to return properly formatted feed documents
 async function performVectorSearch(
   vectorStore: MongoDBAtlasVectorSearch, 
   query: string, 
   n: number, 
   filter: Record<string, FilterValue>
-): Promise<string> {
+): Promise<FeedDocument[]> {
   try {
     const result = await vectorStore.similaritySearchWithScore(query, n, filter);
     console.log(`Vector search returned ${result.length} results`);
-    return JSON.stringify(result);
+    return result.map(([doc]) => ({
+      ...doc.metadata,
+      embedding_text: doc.pageContent,
+    })) as FeedDocument[];
   } catch (searchErr) {
     console.error('Error in vector search:', searchErr);
     throw searchErr;
@@ -187,13 +183,13 @@ async function performDirectQuery(
   collection: Collection, 
   filter: Record<string, FilterValue>, 
   n: number
-): Promise<string> {
+): Promise<FeedDocument[]> {
   const directResults = await collection.find(filter).limit(n).toArray();
   console.log(`Direct query returned ${directResults.length} results`);
-  return formatDirectResults(directResults);
+  return directResults as FeedDocument[];
 }
 
-// Main feed lookup function
+// Main feed lookup function - Fixed to always return valid JSON
 async function performFeedLookup(
   client: MongoClient,
   params: {
@@ -209,48 +205,68 @@ async function performFeedLookup(
     min_jobs?: number;
   }
 ): Promise<string> {
-  console.log("Feed lookup tool called");
-  
-  const { query, n = DEFAULT_RESULT_LIMIT, ...filterParams } = params;
-  const filter = buildFilter(filterParams);
-  
-  // Debug logging
-  console.log('Feed lookup filter:', JSON.stringify(filter));
-  console.log('Query:', query);
-  console.log('Parameters:', filterParams);
-  
-  const db = getDatabase(client);
-  const collection = getCollection(db);
-  const vectorStore = createVectorStore(collection);
-  
-  // Log database and collection info
-  await logDatabaseInfo(client);
-  await logCollectionInfo(collection, filter);
-  
-  // Perform vector search first
   try {
-    const vectorResult = await performVectorSearch(vectorStore, query, n, filter);
-    const parsedResult = JSON.parse(vectorResult);
+    console.log("Feed lookup tool called");
     
-    // If vector search returns results, return them
-    if (parsedResult.length > 0) {
-      return vectorResult;
+    const { query, n = DEFAULT_RESULT_LIMIT, ...filterParams } = params;
+    const filter = buildFilter(filterParams);
+    
+    // Debug logging
+    console.log('Feed lookup filter:', JSON.stringify(filter));
+    console.log('Query:', query);
+    console.log('Parameters:', filterParams);
+    
+    const db = getDatabase(client);
+    const collection = getCollection(db);
+    const vectorStore = createVectorStore(collection);
+    
+    // Log database and collection info
+    await logDatabaseInfo(client);
+    await logCollectionInfo(collection, filter);
+    
+    // Perform vector search first
+    let results: FeedDocument[] = [];
+    try {
+      const vectorResult = await performVectorSearch(vectorStore, query, n, filter);
+      if (vectorResult.length > 0) {
+        results = vectorResult;
+      } else {
+        results = await performDirectQuery(collection, filter, n);
+      }
+    } catch (searchErr) {
+      console.log('Vector search failed, falling back to direct query');
+      results = await performDirectQuery(collection, filter, n);
     }
+
+    console.log(`Feed lookup returning ${results.length} results`);
     
-    // Fallback to direct query if no vector results
-    console.log('Vector search returned no results, falling back to direct query');
-    return await performDirectQuery(collection, filter, n);
+    // Return serializable JSON string that can be parsed later
+    const serializedResults = results.map(doc => ({
+      ...doc,
+      timestamp: doc.timestamp instanceof Date ? doc.timestamp.toISOString() : doc.timestamp
+    }));
     
-  } catch (searchErr) {
-    console.log('Vector search failed, using direct query fallback');
-    return await performDirectQuery(collection, filter, n);
+    return JSON.stringify(serializedResults);
+    
+  } catch (error) {
+    console.error('Error in performFeedLookup:', error);
+    // Return empty array as JSON string instead of throwing
+    return JSON.stringify([]);
   }
 }
 
-// Tool creation function
+// Tool creation function - Fixed schema validation
 function createFeedLookupTool(client: MongoClient) {
   return tool(
-    async (params) => performFeedLookup(client, params),
+    async (params) => {
+      // Validate required parameters
+      if (!params.query || typeof params.query !== 'string') {
+        console.error('Invalid query parameter:', params.query);
+        return JSON.stringify([]);
+      }
+      
+      return performFeedLookup(client, params);
+    },
     {
       name: "feed_lookup",
       description: "Searches for feed data based on various criteria",
@@ -268,6 +284,68 @@ function createFeedLookupTool(client: MongoClient) {
       }),
     }
   );
+}
+
+// Updated process tool response function with better error handling
+async function processToolResponse(state: typeof GraphState.State) {
+  console.log('Processing tool responses...');
+  
+  // Get all tool messages from the current batch
+  const toolMessages = state.messages.filter(m => m.getType() === 'tool');
+  
+  if (toolMessages.length === 0) {
+    console.log('No tool messages found');
+    return { feeds: [] };
+  }
+
+  const allFeeds: IFeed[] = [];
+
+  for (const toolMessage of toolMessages) {
+    if ('content' in toolMessage && typeof toolMessage.content === 'string') {
+      try {
+        console.log('Processing tool message content...');
+        
+        // Check if content starts with "Error:" - this indicates a validation error
+        if (toolMessage.content.startsWith('Error:')) {
+          console.error('Tool returned error:', toolMessage.content);
+          continue; // Skip this message and continue with others
+        }
+        
+        // Parse the JSON response from the tool
+        const feedDocs = JSON.parse(toolMessage.content) as FeedDocument[];
+        
+        if (Array.isArray(feedDocs)) {
+          // Convert each document to IFeed format
+          const feeds = feedDocs.map(doc => ({
+            country_code: doc.country_code || '',
+            currency_code: doc.currency_code || '',
+            status: doc.status || '',
+            transactionSourceName: doc.transactionSourceName || '',
+            recordCount: doc.recordCount || 0,
+            timestamp: doc.timestamp ? new Date(doc.timestamp) : new Date(),
+            progress: doc.progress || {},
+            // Include any additional properties
+            ...Object.fromEntries(
+              Object.entries(doc).filter(([key]) => 
+                !['country_code', 'currency_code', 'status', 'transactionSourceName', 
+                  'recordCount', 'timestamp', 'progress', 'embedding_text'].includes(key)
+              )
+            ),
+          }) as IFeed);
+          
+          allFeeds.push(...feeds);
+          console.log(`Processed ${feeds.length} feeds from tool response`);
+        }
+      } catch (error) {
+        console.error('Error parsing tool response:', error);
+        console.error('Tool content preview:', toolMessage.content.substring(0, 200));
+        // Don't throw here, just continue processing other messages
+      }
+    }
+  }
+
+  console.log(`Total feeds processed: ${allFeeds.length}`);
+  return { feeds: allFeeds };
 }
 
 // Model creation function
@@ -296,7 +374,16 @@ async function callModel(state: typeof GraphState.State, tools: StructuredTool[]
   const prompt = ChatPromptTemplate.fromMessages([
     [
       "system",
-      `You are a helpful AI assistant, collaborating with other assistants. Use the provided tools to progress towards answering the question. If you are unable to fully answer, that's OK, another assistant with different tools will help where you left off. Execute what you can to make progress. If you or any of the other assistants have the final answer or deliverable, prefix your response with FINAL ANSWER so the team knows to stop. You have access to the following tools: {tool_names}.
+      `You are a helpful AI assistant, collaborating with other assistants. Use the provided tools to progress towards answering the question. If you are unable to fully answer, that's OK, another assistant with different tools will help where you left off. Execute what you can to make progress. 
+
+When you retrieve feed data, the system will automatically update the feed state. You currently have ${state.feeds.length} feeds in the state.
+
+When using the feed_lookup tool, always provide a descriptive query string for semantic search. For example:
+- "feed data for US Deal4" instead of just "all records"
+- "completed transaction feeds" for status searches
+- "recent feed processing data" for time-based queries
+
+If you or any of the other assistants have the final answer or deliverable, prefix your response with FINAL ANSWER so the team knows to stop. You have access to the following tools: {tool_names}.
 {system_message}
 Current time: {time}.`,
     ],
@@ -325,29 +412,57 @@ function createWorkflow(client: MongoClient) {
   const workflow = new StateGraph(GraphState)
     .addNode("agent", (state) => callModel(state, tools))
     .addNode("tools", toolNode)
+    .addNode("process_tool", processToolResponse)
     .addEdge("__start__", "agent")
     .addConditionalEdges("agent", shouldContinue)
-    .addEdge("tools", "agent");
+    .addEdge("tools", "process_tool") // Tools output goes to process_tool
+    .addEdge("process_tool", "agent"); // Then back to agent
 
   const checkpointer = new MongoDBSaver({ client, dbName: DB_NAME });
-  
   return workflow.compile({ checkpointer });
 }
 
+// Response type including both text and feeds
+export interface AgentResponse {
+  text: string;
+  feeds: IFeed[];
+}
+
 // Main agent function
-export async function callAgent(client: MongoClient, query: string, thread_id: string) {
+export async function callAgent(client: MongoClient, query: string, thread_id: string): Promise<AgentResponse> {
   console.log(`Agent called with query: ${query}`);
 
   const app = createWorkflow(client);
 
+  // Initialize with empty feeds array
+  const initialFeeds: IFeed[] = [];
+
   const finalState = await app.invoke(
     {
       messages: [new HumanMessage(query)],
+      feeds: initialFeeds,
     },
     { recursionLimit: RECURSION_LIMIT, configurable: { thread_id: thread_id } }
   );
 
-  console.log(finalState.messages[finalState.messages.length - 1].content);
+  const responseText = finalState.messages[finalState.messages.length - 1].content as string;
   
-  return finalState.messages[finalState.messages.length - 1].content;
+  // Log the final state for debugging
+  console.log("Final response text:", responseText.substring(0, 200) + '...');
+  console.log(`Final state contains ${finalState.feeds.length} feeds`);
+  
+  // Log some details about the feeds for debugging
+  if (finalState.feeds.length > 0) {
+    console.log("Final state feeds:", finalState.feeds.slice(0, 3).map(feed => ({
+      country: feed.country_code,
+      source: feed.transactionSourceName,
+      status: feed.status,
+      recordCount: feed.recordCount
+    })));
+  }
+  
+  return {
+    text: responseText,
+    feeds: finalState.feeds,
+  };
 }

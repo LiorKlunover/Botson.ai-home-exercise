@@ -49,8 +49,11 @@ export async function POST(req: NextRequest) {
     // Call the agent with the query
     const response = await callAgent(client, query, thread_id);
 
-    // Return the response
-    return NextResponse.json({ response }, { status: 200 });
+    // Return the response with both text and feeds
+    return NextResponse.json({ 
+      text: response.text,
+      feeds: response.feeds 
+    }, { status: 200 });
   } catch (error) {
     console.error("Error in chat API:", error);
     

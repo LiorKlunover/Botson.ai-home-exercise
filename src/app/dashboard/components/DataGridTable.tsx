@@ -16,7 +16,8 @@ import {
 } from "@mui/x-data-grid";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { Button, TextField, Card, CardContent, CardHeader, Typography } from "@mui/material";
-import { FilterList, Search } from "@mui/icons-material";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import SearchIcon from "@mui/icons-material/Search";
 import FilterPanel from "./FilterPanel";
 
 // Define the Feed schema using Zod for validation
@@ -74,7 +75,7 @@ function CustomToolbar({ onFilterClick, enableFiltering = true, enableExport = t
         <Button
           variant="outlined"
           size="small"
-          startIcon={<FilterList />}
+          startIcon={<FilterListIcon />}
           onClick={onFilterClick}
         >
           Advanced Filters
@@ -355,7 +356,7 @@ export default function EnhancedDataGrid({
               value={searchText}
               onChange={(e) => handleSearch(e.target.value)}
               InputProps={{
-                startAdornment: <Search fontSize="small" sx={{ mr: 1 }} />
+                startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1 }} />
               }}
             />
           </div>

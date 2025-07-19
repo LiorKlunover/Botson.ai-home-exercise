@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { z } from "zod";
+import { IFeed } from "@/types";
+import DataGridTable from "@/app/dashboard/components/DataGridTable";
+import TotalCard from "@/app/dashboard/components/TotalCard";
 
 // Generate a random ID for thread tracking
 const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -11,6 +14,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  feeds?: IFeed[];
 }
 
 interface ChatProps {
@@ -22,6 +26,7 @@ export default function Chat({ className }: ChatProps) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [threadId, setThreadId] = useState<string>(() => generateId());
+  const [currentFeeds, setCurrentFeeds] = useState<IFeed[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Schema for input validation
@@ -72,12 +77,19 @@ export default function Chat({ className }: ChatProps) {
       
       const data = await response.json();
       
+      // Extract text and feeds from the response
+      const { text, feeds = [] } = data;
+      
+      // Update current feeds state
+      setCurrentFeeds(feeds);
+      
       // Add assistant message to chat
       const assistantMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: data.response,
+        content: text,
         timestamp: new Date(),
+        feeds: feeds,
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
@@ -109,7 +121,7 @@ export default function Chat({ className }: ChatProps) {
   };
 
   return (
-    <div className={`flex flex-col h-full max-w-4xl mx-auto ${className}`}>
+    <div className={`flex flex-col h-full max-w-6xl mx-auto ${className}`}>
       <div className="flex justify-between items-center mb-4 p-4 bg-white rounded-t-lg shadow">
         <h1 className="text-xl font-semibold">AI Chat Assistant</h1>
         <button
@@ -119,6 +131,8 @@ export default function Chat({ className }: ChatProps) {
           New Chat
         </button>
       </div>
+      
+      
       
       <div className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-lg mb-4">
         {messages.length === 0 ? (
@@ -180,21 +194,28 @@ export default function Chat({ className }: ChatProps) {
         <div ref={messagesEndRef} />
       </div>
       
+     
       <form onSubmit={handleSubmit} className="p-4 bg-white rounded-b-lg shadow">
-        <div className="flex">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 p-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-500 text-white rounded-r-lg hover:bg-blue-600 transition disabled:bg-blue-300"
-            disabled={isLoading}
-          >
+        <div className="flex flex-col gap-2">
+          {currentFeeds.length > 0 && (
+            <div className="text-sm text-gray-500 mb-2">
+              Found {currentFeeds.length} feed records. You can filter and explore them in the table above.
+            </div>
+          )}
+          <div className="flex">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type your message..."
+              className="flex-1 p-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-500 text-white rounded-r-lg hover:bg-blue-600 transition disabled:bg-blue-300"
+              disabled={isLoading}
+            >
             {isLoading ? (
               <span className="flex items-center justify-center">
                 <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -222,6 +243,32 @@ export default function Chat({ className }: ChatProps) {
               </span>
             )}
           </button>
+          </div>
+          
+          {/* Data Grid for displaying feed records */}
+          <div className="mt-10 pt-4 space-y-6 border-t border-gray-200">
+            {currentFeeds.length > 0 && (
+              <div className="mb-4">
+                <TotalCard 
+                  totalRecords={currentFeeds.length} 
+                  isFiltered={false} 
+                />
+              </div>
+            )}
+            
+            {currentFeeds.length > 0 && (
+              <div className="mb-4 mt-6">
+                <DataGridTable 
+                  feeds={currentFeeds} 
+                  title="Feed Records" 
+                  description="Data retrieved from your query"
+                  enableFiltering={true}
+                  enableExport={true}
+                />
+              </div>
+            )}
+          </div>
+          
         </div>
       </form>
     </div>
