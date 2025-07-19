@@ -9,6 +9,8 @@ import ProgressMetricsCard from './components/ProgressMetricsCard';
 import ClientActivityCard from './components/ClientActivityCard';
 import MetadataQualityCard from './components/MetadataQualityCard';
 import RecordsPerFeedCard from './components/RecordsPerFeedCard';
+import EnhancedDataGrid from './components/DataGridTable';
+import { GridRowParams } from '@mui/x-data-grid';
 
 interface Filters {
   countries: string[];
@@ -280,61 +282,25 @@ export default function Dashboard() {
       </div>
       
       {/* Feed Data Display */}
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">Feed Data</h2>
-        
-        {isLoading ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="animate-pulse text-gray-500">Loading feed data...</div>
-          </div>
-        ) : error ? (
-          <div className="text-red-500 py-4">{error}</div>
-        ) : !feedData || feedData.feeds.length === 0 ? (
-          <div className="py-4 text-gray-500">
-            <p>No feed data available for the selected filters.</p>
-            <p className="mt-2 text-sm">Try adjusting your filter criteria or page settings.</p>
+      <div className="bg-white rounded-lg shadow-sm">
+        {error ? (
+          <div className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Feed Data</h2>
+            <div className="text-red-500 py-4">{error}</div>
           </div>
         ) : (
-          <div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {feedData.feeds.map((feed, index) => (
-                    <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{feed.transactionSourceName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{feed.country_code}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          feed.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                          feed.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' : 
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {feed.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{feed.recordCount}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(feed.timestamp).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            <div className="mt-4 text-sm text-gray-600">
-              <p>Showing {feedData.feeds.length} of {feedData.pagination.totalCount} total feeds</p>
-            </div>
-          </div>
+          <EnhancedDataGrid
+            feeds={feedData?.feeds || []}
+            title="Feed Data"
+            description={feedData ? `Showing ${feedData.feeds.length} of ${feedData.pagination.totalCount} total feeds` : undefined}
+            loading={isLoading}
+            enableFiltering={true}
+            enableExport={true}
+            onRowClick={(params: GridRowParams) => {
+              // Handle row click if needed
+              console.log('Row clicked:', params.row);
+            }}
+          />
         )}
       </div>
     </div>
