@@ -28,7 +28,6 @@ export function NavBar() {
   const navItems = [
     { href: '/', label: 'Home' },
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/operations-dashboard', label: 'Operations Dashboard' },
     { href: '/ai-chat-assistant', label: 'AI Chat Assistant' },
   ];
 
